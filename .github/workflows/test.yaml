@@ -27,7 +27,7 @@ jobs:
 
       - name: 📦 Install Poetry
         run: |
-          pip install poetry
+          pip install poetry pytest
           poetry --version
 
       - name: 🛠️ Install Python dependencies with Poetry
