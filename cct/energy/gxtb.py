@@ -8,6 +8,7 @@ from cct.energy.consts import EH2KCALMOL
 
 
 def parse_energy(filename: str) -> float:
+    """Parse energy from gxtb output file."""
     energy = None
     inside_energy_block = False
 
@@ -30,7 +31,7 @@ def parse_energy(filename: str) -> float:
 
 
 def gxtb_singlepoint(mol: Chem.Mol, use_docker: bool = True) -> float:
-
+    """Calculate single-point energy using gxtb."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
         tmp_input_file = tmpdir / "input.xyz"
@@ -49,7 +50,7 @@ def gxtb_singlepoint(mol: Chem.Mol, use_docker: bool = True) -> float:
 
 
 def gxtb_optimise(mol: Chem.Mol, use_docker: bool = True) -> float:
-
+    """Optimize molecular geometry using gxtb."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
         tmp_input_file = tmpdir / "input.xyz"

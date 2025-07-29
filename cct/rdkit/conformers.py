@@ -1,6 +1,5 @@
 import copy
 import logging
-from typing import TypeAlias
 
 import numpy as np
 from rdkit import Chem
@@ -14,11 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 def get_coordinates(mol: Chem.Mol, conf_id: int | None = 0) -> np.ndarray:
+    """Get coordinates from molecular conformer."""
     coords = mol.GetConformer(conf_id).GetPositions()
     return coords
 
 
 def set_random_coordinates(mol: Chem.Mol):
+    """Set random coordinates for a molecule using ETKDG."""
     ps = Chem.AllChem.ETKDGv3()
     ps.useRandomCoords = True
     AllChem.EmbedChem.Mol(mol, ps)
@@ -48,6 +49,7 @@ def set_coordinates(mol: Chem.Mol, coords: np.ndarray, conf_id: int = -1):
 
 
 def extract_conformer(mol: Chem.Mol, /, cid: int) -> Chem.Mol:
+    """Extract a single conformer from a multi-conformer molecule."""
     single_conf = Chem.Mol(mol)
     single_conf.RemoveAllConformers()
     single_conf.AddConformer(mol.GetConformer(cid), assignId=True)
@@ -55,6 +57,7 @@ def extract_conformer(mol: Chem.Mol, /, cid: int) -> Chem.Mol:
 
 
 def transplant_coordinates(ref: Chem.Mol, query: Chem.Mol) -> Chem.Mol:
+    """Transplant coordinates from reference molecule to query molecule."""
     DISTANCE_THRESHOLD = 0.25
 
     query_noh = Chem.RemoveHs(query)
@@ -85,7 +88,7 @@ def transplant_coordinates(ref: Chem.Mol, query: Chem.Mol) -> Chem.Mol:
     ref_coords = get_coordinates(ref)  # with explicit hydrogens
 
     dist = cdist(query_coords, ref_coords)
-    q_ix, r_ix = zip(*np.argwhere(dist < DISTANCE_THRESHOLD).astype(int))
+    q_ix, r_ix = zip(*np.argwhere(dist < DISTANCE_THRESHOLD).astype(int), strict=False)
     q_ix = np.array(q_ix)
     r_ix = np.array(r_ix)
 

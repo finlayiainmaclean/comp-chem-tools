@@ -23,7 +23,7 @@ def set_residue_info(
     if len(chain_id) != 1:
         raise ValueError("PDB chain IDs are exactly one character")
 
-    for at, at_copy in zip(mol.GetAtoms(), mol_copy.GetAtoms()):
+    for at, at_copy in zip(mol.GetAtoms(), mol_copy.GetAtoms(), strict=False):
         info = at_copy.GetPDBResidueInfo()
         info.SetChainId(str(chain_id))
         info.SetResidueNumber(int(resnum))

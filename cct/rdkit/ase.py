@@ -1,13 +1,12 @@
 import numpy as np
 from ase import Atoms
-from ase.calculators.calculator import all_changes
-from ase.optimize import BFGS
 from rdkit import Chem
 
 from cct.rdkit.conformers import set_coordinates
 
 
 def rdkit_to_ase(mol: Chem.Mol) -> Atoms:
+    """Convert RDKit molecule to ASE Atoms object."""
     if mol.GetNumConformers() == 0:
         raise ValueError("Mol has no 3-D conformer; generate coordinates first.")
 
@@ -28,5 +27,6 @@ def rdkit_to_ase(mol: Chem.Mol) -> Atoms:
 
 
 def ase_to_rdkit(atoms: Atoms, rdmol: Chem.Mol) -> Chem.Mol:
+    """Convert ASE Atoms object to RDKit molecule."""
     set_coordinates(rdmol, atoms.get_positions())
     return rdmol

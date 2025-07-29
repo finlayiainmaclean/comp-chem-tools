@@ -21,11 +21,14 @@ EGRET1_URL = (
 
 
 class EnergyToolkit:
+    """Toolkit for molecular energy calculations using various methods."""
+
     def __init__(self):
+        """Initialize the energy toolkit."""
         self.egret1 = None
 
     def load_egret1(self):
-
+        """Load the EGRET1 machine learning model for energy calculations."""
         if self.egret1 is None:
             egret1_path = PROJECT_ROOT / "data" / "EGRET_1.model"
             print(egret1_path, egret1_path.exists())
@@ -42,6 +45,7 @@ class EnergyToolkit:
         return self.egret1
 
     def singlepoint(self, rdmol: Chem.Mol, method: METHODS = "EGRET1"):
+        """Calculate single-point energy for a molecule."""
         atoms: Atoms = rdkit_to_ase(rdmol)
 
         match method:
@@ -59,7 +63,7 @@ class EnergyToolkit:
         max_iterations: int = 500,
         fmax: float = 0.05,
     ) -> Chem.Mol:
-
+        """Optimize molecular geometry and return optimized molecule with energy."""
         atoms = rdkit_to_ase(rdmol)
 
         match method:

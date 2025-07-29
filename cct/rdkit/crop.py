@@ -10,6 +10,7 @@ from cct.rdkit.conformers import get_coordinates
 
 
 def is_bond_to_break(bond: Bond) -> bool:
+    """Determine if a bond should be broken during protein cropping."""
     src = bond.GetBeginAtom()
     trg = bond.GetEndAtom()
 
@@ -33,6 +34,7 @@ def crop_protein(
     ligand_rdmol: Chem.Mol,
     max_distance_to_ligand: float = 4,
 ):
+    """Crop protein structure to retain only residues within distance of ligand."""
     protein_rdmol = Chem.MolFromPDBBlock(
         Chem.MolToPDBBlock(protein_rdmol, flavor=4), removeHs=False
     )
@@ -72,7 +74,9 @@ def crop_protein(
     }
 
     min_dist_to_ligand = cdist(ligand_coords, protein_coords).min(axis=0)
-    df = pd.DataFrame(zip(part_list, min_dist_to_ligand), columns=["group", "dist"])
+    df = pd.DataFrame(
+        zip(part_list, min_dist_to_ligand, strict=False), columns=["group", "dist"]
+    )
     group_idx_under_threshold = (
         df.groupby("group")["dist"].min() < max_distance_to_ligand
     ).to_dict()

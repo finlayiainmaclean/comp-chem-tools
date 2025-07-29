@@ -6,8 +6,7 @@ class ImplicitHydrogenError(ValueError):
 
 
 def assert_all_hydrogens_explicit(mol: Chem.Mol):
-    """
-    Ensure that *every* hydrogen in `mol` is represented as an explicit atom.
+    """Ensure that *every* hydrogen in `mol` is represented as an explicit atom.
 
     Parameters
     ----------
@@ -18,6 +17,7 @@ def assert_all_hydrogens_explicit(mol: Chem.Mol):
     ------
     ValueError
         If any atom retains implicit hydrogens.
+
     """
     # Make sure the atom property caches are up-to-date
     mol.UpdatePropertyCache(strict=False)

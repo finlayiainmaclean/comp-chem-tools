@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 def mmff_optimise(
     mol: Chem.Mol, constrained_atom_idxs: list[int] | None = None
 ) -> tuple[float, Chem.Mol]:
+    """Optimize molecular geometry using MMFF force field."""
     # Define a force field with constraints on non-hydrogen atoms
     ff = AllChem.MMFFGetMoleculeForceField(
         mol, AllChem.MMFFGetMoleculeProperties(mol, mmffVariant="MMFF94")
