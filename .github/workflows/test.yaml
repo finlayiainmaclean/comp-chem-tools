@@ -2,16 +2,20 @@ name: Test CI
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'dev/**'
   pull_request:
-    branches: [main]
+    branches:
+      - main
+      - 'dev/**'
 
 jobs:
   test:
     runs-on: ubuntu-latest
     defaults:
       run:
-        shell: bash -l  # ensures conda env activation works
+        shell: bash -l
 
     steps:
       - name: 🧾 Checkout code

@@ -10,6 +10,10 @@ docs/bin/
 docs/source/readme.rst
 
 
+# Project files
+data
+
+
 ##---------------------------------------------------
 # Continuous Integration .gitignore files
 ##---------------------------------------------------
@@ -17,6 +21,7 @@ docs/source/readme.rst
 # Ignore test result XML files
 testresults.xml
 coverage.xml
+
 
 
 ##---------------------------------------------------
