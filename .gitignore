@@ -11,9 +11,8 @@ docs/source/readme.rst
 
 
 # Project files
-data
-
-notebooks
+data/
+notebooks/
 
 
 ##---------------------------------------------------
