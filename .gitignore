@@ -13,6 +13,8 @@ docs/source/readme.rst
 # Project files
 data
 
+notebooks
+
 
 ##---------------------------------------------------
 # Continuous Integration .gitignore files

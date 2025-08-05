@@ -1,62 +1,39 @@
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.4  # or latest
-    hooks:
-      - id: ruff
-        args: ["--fix", "--unsafe-fixes"]
-      - id: ruff-format
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  # Ruff version.
+  rev: v0.12.7
+  hooks:
+    # Run the linter.
+    - id: ruff-check
+      types_or: [ python, pyi ]
+      args: [ --fix ]
+    # Run the formatter.
+    - id: ruff-format
+      types_or: [ python, pyi ]
 
-  - repo: https://github.com/kynan/nbstripout
-    rev: 0.7.1
-    hooks:
-      - id: nbstripout
-
-  - repo: https://github.com/nbQA-dev/nbQA
-    rev: 1.8.7
-    hooks:
-      - id: nbqa-ruff
-
-  - repo: https://github.com/pre-commit/pygrep-hooks
-    rev: v1.10.0
-    hooks:
-      - id: python-check-blanket-noqa
-      - id: python-check-blanket-type-ignore
-      - id: python-check-mock-methods
-      - id: python-no-log-warn
-      - id: rst-backticks
-      - id: rst-directive-colons
-        types: [text]
-      - id: rst-inline-touching-normal
-        types: [text]
-
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
-    hooks:
-      - id: check-added-large-files
-      - id: check-ast
-      - id: check-builtin-literals
-      - id: check-case-conflict
-      - id: check-docstring-first
-      - id: check-shebang-scripts-are-executable
-      - id: check-merge-conflict
-      - id: check-json
-      - id: check-toml
-      - id: check-xml
-      - id: check-yaml
-      - id: debug-statements
-      - id: destroyed-symlinks
-      - id: detect-private-key
-      - id: end-of-file-fixer
-        exclude: ^LICENSE|\.(html|csv|txt|svg|py)$
-      - id: pretty-format-json
-        args: ["--autofix", "--no-ensure-ascii", "--no-sort-keys"]
-        exclude_types: [jupyter]
-      - id: requirements-txt-fixer
-      - id: trailing-whitespace
-        args: [--markdown-linebreak-ext=md]
-        exclude: \.(html|svg)$
-
-  - repo: https://github.com/asottile/setup-cfg-fmt
-    rev: v2.5.0
-    hooks:
-      - id: setup-cfg-fmt
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v4.6.0
+  hooks:
+    - id: check-added-large-files
+    - id: check-ast
+    - id: check-builtin-literals
+    - id: check-case-conflict
+    - id: check-docstring-first
+    - id: check-shebang-scripts-are-executable
+    - id: check-merge-conflict
+    - id: check-json
+    - id: check-toml
+    - id: check-xml
+    - id: check-yaml
+    - id: debug-statements
+    - id: destroyed-symlinks
+    - id: detect-private-key
+    - id: end-of-file-fixer
+      exclude: ^LICENSE|\.(html|csv|txt|svg|py)$
+    - id: pretty-format-json
+      args: ["--autofix", "--no-ensure-ascii", "--no-sort-keys"]
+      exclude_types: [jupyter]
+    - id: requirements-txt-fixer
+    - id: trailing-whitespace
+      args: [--markdown-linebreak-ext=md]
+      exclude: \.(html|svg)$

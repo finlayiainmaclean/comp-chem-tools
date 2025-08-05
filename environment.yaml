@@ -2,6 +2,23 @@ name: cct
 channels:
   - conda-forge
 dependencies:
-  - python=3.10
+  - python=3.12
   - pip
-  - poetry
+  - crest
+  - xtb
+  - libgfortran=14.2.0
+  - click
+  - crest
+  - rdkit
+  - tblite-python=>0.4.0
+  - tblite=>0.4.0
+  - jupyter
+  - pip:
+    - torch
+    - torchani
+    - mace_torch==0.3.12
+    - wget
+    - pymsym
+    - datamol
+    - p_tqdm
+    - ray

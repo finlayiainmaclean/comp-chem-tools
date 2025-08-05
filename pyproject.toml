@@ -33,8 +33,10 @@ build-backend = "poetry.core.masonry.api"
 [tool.ruff]
 line-length = 88
 target-version = "py310"
+
+[tool.ruff.lint]
 extend-select = ["E", "F", "B", "I", "W", "C4", "D"]
-ignore = ["D100", "D101"]  # adjust to taste
+ignore = ["D100", "D101", "D205"]  # adjust to taste
 
 [tool.ruff.format]
 quote-style = "double"
