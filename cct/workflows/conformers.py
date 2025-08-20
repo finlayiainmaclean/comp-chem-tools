@@ -6,12 +6,15 @@ import numpy as np
 from rdkit import Chem
 
 from cct.ase_calcs import QM_METHODS, CalculatorFactory
-from cct.rdkit.conformers import embed, keep_conformers, sort_conformers_by_values
-from cct.rdkit.crest import run_metadynamics, run_screen
+from cct.crest import run_metadynamics
+from cct.rdkit.conformers import embed, keep_conformers, remove_high_energy_conformers, sort_conformers_by_values
+from cct.rdkit.distinct_conformers import get_distinct_conformers
 
 RDKIT_MODES = Literal["RECKLESS", "RAPID"]
 CREST_MODES = Literal["METICULOUS", "CAREFUL"]
 MODES = Literal["METICULOUS", "CAREFUL", "RECKLESS", "RAPID"]
+
+USE_CREST = False
 
 
 def _generate_conformers_crest(
@@ -19,85 +22,66 @@ def _generate_conformers_crest(
     mode: CREST_MODES,
     multiplicity: int = 1,
     charge: int = 0,
-    num_cores: int = None,
+    solvent: Literal["water"] | None = None,
+    num_cores: int | None = None,
 ):
     """Generate conformers using CREST method."""
     if num_cores is None:
         num_cores = cpu_count()
 
-    mol = run_metadynamics(
-        mol,
-        charge=charge,
-        multiplicity=multiplicity,
-        quick=mode == "CAREFUL",
-        num_cores=num_cores,
-    )
+    mol = run_metadynamics(mol, charge=charge, multiplicity=multiplicity, quick=mode == "CAREFUL", solvent=solvent)
     return mol
 
 
 def _generate_conformers_rdkit(
-    mol,
-    mode: RDKIT_MODES,
-    charge: int | None = None,
-    multiplicity: int = 1,
-    num_cores: int = None,
+    mol, mode: RDKIT_MODES, charge: int | None = None, multiplicity: int = 1, solvent: Literal["water"] | None = None
 ):
     """Generate conformers using RDKit method."""
     if not charge:
         charge = Chem.GetFormalCharge(mol)
 
-    if num_cores is None:
-        num_cores = cpu_count()
-
     # 1. Embed using RDKit
+    mode = mode.upper()
     match mode:
         case "RECKLESS":
             rmsd_threshold = 0.25
-            mol = embed(mol, num_confs=100, rmsd_threshold=rmsd_threshold)
             initial_energy_window = 10.0
             final_energy_window = 5.0
             max_conformers_sp_sqm = 50
             max_conformers_opt_sqm = 20
+            mol = embed(mol, num_confs=100, rmsd_threshold=rmsd_threshold)
 
         case "RAPID":
             rmsd_threshold = 0.1
-            mol = embed(mol, num_confs=300, rmsd_threshold=rmsd_threshold)
             initial_energy_window = 20.0
             final_energy_window = 10.0
             max_conformers_sp_sqm = 100
             max_conformers_opt_sqm = 50
+            mol = embed(mol, num_confs=300, rmsd_threshold=rmsd_threshold)
 
-    click.echo(f"{mol.GetNumConformers()} conformers")
+        case _:
+            raise NotImplementedError(f"{mode} not a valid mode.")
 
-    click.echo("Running SQM singlepoint")
-    mol, energies = run_screen(
-        mol,
-        screen_type="singlepoint",
-        multiplicity=multiplicity,
-        charge=charge,
-        num_cores=num_cores,
-        energy_window=initial_energy_window,
-        rmsd_threshold=rmsd_threshold,
-    )
+    print("Running SQM singlepoint")
+
+    calcs = CalculatorFactory()
+    energies = calcs.singlepoint_mol(mol, method="GFN2-xTB", charge=charge, multiplicity=multiplicity, solvent=solvent)
+    mol, energies = remove_high_energy_conformers(mol, energies=energies, energy_window=initial_energy_window)
+    mol, energies = get_distinct_conformers(mol, energies=energies, rmsd_threshold=rmsd_threshold)
+
     conf_ids_to_keep = np.argsort(energies)[:max_conformers_sp_sqm]
-    click.echo(f"{mol.GetNumConformers()} conformers")
-    keep_conformers(mol, conf_ids_to_keep)
-    click.echo(f"{mol.GetNumConformers()} conformers")
+    keep_conformers(mol, conf_ids=conf_ids_to_keep)
 
-    click.echo("Running SQM optimisation")
-    mol, energies = run_screen(
-        mol,
-        screen_type="optimise",
-        multiplicity=multiplicity,
-        charge=charge,
-        num_cores=num_cores,
-        energy_window=final_energy_window,
-        rmsd_threshold=rmsd_threshold,
+    print("Running SQM optimisation")
+    mol, energies = calcs.optimise_mol(
+        mol, method="GFN2-xTB", charge=charge, multiplicity=multiplicity, solvent=solvent
     )
+    mol, energies = remove_high_energy_conformers(mol, energies=energies, energy_window=final_energy_window)
+    mol, energies = get_distinct_conformers(mol, energies=energies, rmsd_threshold=rmsd_threshold)
+
     conf_ids_to_keep = np.argsort(energies)[:max_conformers_opt_sqm]
-    click.echo(f"{mol.GetNumConformers()} conformers")
-    keep_conformers(mol, conf_ids_to_keep)
-    click.echo(f"{mol.GetNumConformers()} conformers")
+    keep_conformers(mol, conf_ids=conf_ids_to_keep)
+    print(f"{mol.GetNumConformers()} conformers")
 
     return mol
 
@@ -107,10 +91,10 @@ def generate_conformers(
     /,
     *,
     mode: MODES = "rapid",
-    qm_method: QM_METHODS = "MACE_MEDIUM",
-    charge: int = 0,
+    qm_method: QM_METHODS = "AIMNet2",
+    charge: int | None = None,
     multiplicity: int = 1,
-    num_cores: int | None = None,
+    solvent: Literal["water"] | None = None,
 ):
     """Generate molecular conformers using various computational methods.
 
@@ -121,15 +105,12 @@ def generate_conformers(
         qm_method: Quantum mechanical method for calculations.
         charge: Molecular charge.
         multiplicity: Spin multiplicity.
-        num_cores: Number of CPU cores to use (None for all available).
 
     Returns:
     -------
         Tuple of optimized molecule and solvated energies.
 
     """
-    if num_cores is None:
-        num_cores = cpu_count()
 
     # Set charge if not provided
     if charge is None:
@@ -138,21 +119,9 @@ def generate_conformers(
     # Generate conformers based on mode
     mode = mode.upper()
     if mode in get_args(CREST_MODES):
-        mol = _generate_conformers_crest(
-            mol,
-            mode=mode,
-            multiplicity=multiplicity,
-            charge=charge,
-            num_cores=num_cores,
-        )
+        mol = _generate_conformers_crest(mol, mode=mode, multiplicity=multiplicity, charge=charge, solvent=solvent)
     elif mode in get_args(RDKIT_MODES):
-        mol = _generate_conformers_rdkit(
-            mol,
-            mode=mode,
-            multiplicity=multiplicity,
-            charge=charge,
-            num_cores=num_cores,
-        )
+        mol = _generate_conformers_rdkit(mol, mode=mode, multiplicity=multiplicity, charge=charge, solvent=solvent)
     else:
         raise ValueError(f"Unknown mode: {mode}", err=True)
 
@@ -169,30 +138,37 @@ def generate_conformers(
     calcs = CalculatorFactory()
 
     # Single point calculations
-    click.echo(f"Running QM singlepoint with {mol.GetNumConformers()} conformers")
+    print(f"Running QM singlepoint with {mol.GetNumConformers()} conformers")
 
-    energies = calcs.singlepoint(
-        mol, method=qm_method, multiplicity=multiplicity, charge=charge
+    energies = calcs.singlepoint_mol(
+        mol,
+        method=qm_method,
+        multiplicity=multiplicity,
+        charge=charge,
     )
     conf_ids_to_keep = np.argsort(energies)[:max_conformers_qm]
-    keep_conformers(mol, conf_ids_to_keep)
+    keep_conformers(mol, conf_ids=conf_ids_to_keep)
 
-    click.echo(f"Running QM optimisation with {mol.GetNumConformers()} conformers")
+    print(f"Running QM optimisation with {mol.GetNumConformers()} conformers")
 
     # Optimization
-    mol, gas_phase_energies = calcs.optimise(
-        mol, method=qm_method, multiplicity=multiplicity, charge=charge
+    mol, energies = calcs.optimise_mol(
+        mol,
+        method=qm_method,
+        multiplicity=multiplicity,
+        charge=charge,
     )
+    if solvent == "water":
+        # Solvation energy
+        solvation_energies = calcs.solvation_energy_mol(mol, multiplicity=multiplicity, charge=charge, method="MolSolv")
 
-    # Solvation energy
-    solvation_energies = calcs.solvation_energy(
-        mol, multiplicity=multiplicity, charge=charge
-    )
+        # Combined energies
+        energies = energies + solvation_energies
+    elif solvent is not None:
+        raise ValueError("Only water solvent supported")
 
-    # Combined energies
-    solvated_energies = gas_phase_energies + solvation_energies
-    mol, solvated_energies = sort_conformers_by_values(mol, solvated_energies)
-    return mol, solvated_energies
+    mol, energies = sort_conformers_by_values(mol, values=energies)
+    return mol, energies
 
 
 @click.command()
@@ -204,9 +180,7 @@ def generate_conformers(
 )
 @click.option("--input", required=True, help="Input molecule file")
 @click.option("--output", type=click.Path(), help="Output file path for results")
-@click.option(
-    "--multiplicity", type=int, default=1, help="Spin multiplicity of the molecule"
-)
+@click.option("--multiplicity", type=int, default=1, help="Spin multiplicity of the molecule")
 @click.option(
     "--qm_method",
     type=click.Choice(get_args(QM_METHODS), case_sensitive=False),
@@ -239,11 +213,11 @@ of accuracy:
     if num_cores == -1:
         num_cores = cpu_count()
 
-    click.echo(f"Using {num_cores} CPU cores")
-    click.echo(f"Mode: {mode}")
-    click.echo(f"Input: {input}")
-    click.echo(f"Multiplicity: {multiplicity}")
-    click.echo(f"QM Method: {qm_method}")
+    print(f"Using {num_cores} CPU cores")
+    print(f"Mode: {mode}")
+    print(f"Input: {input}")
+    print(f"Multiplicity: {multiplicity}")
+    print(f"QM Method: {qm_method}")
 
     # Parse molecule
     mol = Chem.MolFromMolFile(input)
@@ -266,7 +240,7 @@ of accuracy:
         mol.SetProp("Energy", str(solvated_energies[conf_id]))
         writer.write(mol, confId=conf_id)
     writer.close()
-    click.echo(f"Results saved to: {output}")
+    print(f"Results saved to: {output}")
 
 
 if __name__ == "__main__":

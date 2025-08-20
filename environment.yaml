@@ -10,15 +10,22 @@ dependencies:
   - click
   - crest
   - rdkit
-  - tblite-python=>0.4.0
-  - tblite=>0.4.0
+  - tblite-python>=0.4.0
+  - tblite>=0.4.0
   - jupyter
+  - nwchem
+  - openbabel
+  - freesasa
   - pip:
     - torch
     - torchani
-    - mace_torch==0.3.12
+    # - mace_torch==0.3.12
+    - e3nn
     - wget
     - pymsym
     - datamol
     - p_tqdm
     - ray
+    - git+https://github.com/isayevlab/aimnetcentral.git
+    - torch_geometric
+    - fairchem-core

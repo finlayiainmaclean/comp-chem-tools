@@ -1,10 +1,18 @@
+from collections.abc import Sequence
+from typing import Tuple
+
 import numpy as np
 from datamol import same_mol
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
 
-def sort_conformers_by_tag(mol: Chem.Mol, tag: str, ascending: bool = True) -> Chem.Mol:
+def has_conformer(mol: Chem.Mol, /, *, conf_id: int):
+    conformer_ids = {conf.GetId() for conf in mol.GetConformers()}
+    return conf_id in conformer_ids
+
+
+def sort_conformers_by_tag(mol: Chem.Mol, /, *, tag: str, ascending: bool = True) -> Chem.Mol:
     """Sort conformers in an RDKit molecule by a scalar SD tag stored on each conformer.
 
     Args:
@@ -27,9 +35,7 @@ def sort_conformers_by_tag(mol: Chem.Mol, tag: str, ascending: bool = True) -> C
             try:
                 val = float(val)
             except ValueError:
-                raise ValueError(
-                    f"SD tag '{tag}' on conformer {conf.GetId()} is not a float: {val}"
-                ) from None
+                raise ValueError(f"SD tag '{tag}' on conformer {conf.GetId()} is not a float: {val}") from None
             values.append((conf, val))
         else:
             raise KeyError(f"Conformer {conf.GetId()} is missing tag '{tag}'")
@@ -52,7 +58,7 @@ def sort_conformers_by_tag(mol: Chem.Mol, tag: str, ascending: bool = True) -> C
     return new_mol
 
 
-def get_conformer_values(mol: Chem.Mol, tag: str) -> np.ndarray[float]:
+def get_conformer_values(mol: Chem.Mol, /, *, tag: str) -> np.ndarray:
     """Extract scalar values from SD tags on conformers.
 
     Args:
@@ -74,9 +80,7 @@ def get_conformer_values(mol: Chem.Mol, tag: str) -> np.ndarray[float]:
             try:
                 val = float(val)
             except ValueError:
-                raise ValueError(
-                    f"SD tag '{tag}' on conformer {conf.GetId()} is not a float: {val}"
-                ) from None
+                raise ValueError(f"SD tag '{tag}' on conformer {conf.GetId()} is not a float: {val}") from None
             values.append((conf, val))
         else:
             raise KeyError(f"Conformer {conf.GetId()} is missing tag '{tag}'")
@@ -85,16 +89,14 @@ def get_conformer_values(mol: Chem.Mol, tag: str) -> np.ndarray[float]:
     return values
 
 
-def reindex_conformers(mol: Chem.Mol) -> None:
+def reindex_conformers(mol: Chem.Mol, /) -> None:
     """Reassign conformer IDs to be sequential starting from 0."""
     # Deepcopy all conformers *before* removing them
     for i, conf in enumerate(mol.GetConformers()):
         conf.SetId(i)
 
 
-def merge_conformers(
-    mols: list[Chem.Mol], skip_same_mol_check: bool = False
-) -> Chem.Mol:
+def merge_conformers(mols: Sequence[Chem.Mol], /, *, skip_same_mol_check: bool = False) -> Chem.Mol:
     """Merge conformers from multiple RDKit molecules into a single
     multi-conformer molecule.
 
@@ -131,14 +133,12 @@ def merge_conformers(
 
             # Copy conformer-level properties
             for prop in conf.GetPropNames():
-                ref.GetConformer(ref.GetNumConformers() - 1).SetProp(
-                    prop, conf.GetProp(prop)
-                )
+                ref.GetConformer(ref.GetNumConformers() - 1).SetProp(prop, conf.GetProp(prop))
 
     return ref
 
 
-def split_conformers(mol: Chem.Mol) -> list[Chem.Mol]:
+def split_conformers(mol: Chem.Mol, /) -> list[Chem.Mol]:
     """Split a multi-conformer RDKit molecule into a list of single-conformer molecules.
 
     Args:
@@ -167,9 +167,7 @@ def split_conformers(mol: Chem.Mol) -> list[Chem.Mol]:
     return single_conformers
 
 
-def sort_conformers_by_values(
-    mol: Chem.Mol, values: list[float], ascending: bool = True
-) -> Chem.Mol:
+def sort_conformers_by_values(mol: Chem.Mol, /, *, values: Sequence[float], ascending: bool = True) -> Chem.Mol:
     """Sort conformers in an RDKit molecule by a list of scalar values
     (e.g., energies, RMSDs).
 
@@ -203,10 +201,10 @@ def sort_conformers_by_values(
         new_mol.AddConformer(new_conf, assignId=True)
         sorted_values.append(val)
 
-    return new_mol, sorted_values
+    return new_mol, np.array(sorted_values)
 
 
-def keep_conformers(mol: Chem.Mol, conf_ids: list[int], renumber_conf_ids: bool = True):
+def keep_conformers(mol: Chem.Mol, /, *, conf_ids: Sequence[int], renumber_conf_ids: bool = True) -> Chem.Mol:
     """Remove all conformers from an RDKit molecule except those with specified IDs.
 
     Args:
@@ -217,25 +215,21 @@ def keep_conformers(mol: Chem.Mol, conf_ids: list[int], renumber_conf_ids: bool 
 
     """
     # Convert to a set for fast lookup
-    keep_set = set(conf_ids)
 
-    # Get all conformer IDs
-    all_conf_ids = [conf.GetId() for conf in mol.GetConformers()]
+    new_mol = Chem.Mol(mol)
+    new_mol.RemoveAllConformers()
 
-    # Determine which to remove
-    conf_ids_to_remove = [cid for cid in all_conf_ids if cid not in keep_set]
-
-    # Remove in reverse to avoid index shifting
-    for conf_id in sorted(conf_ids_to_remove, reverse=True):
-        mol.RemoveConformer(conf_id)
+    for conf_id in conf_ids:
+        conf = mol.GetConformer(int(conf_id))
+        new_mol.AddConformer(conf)
 
     if renumber_conf_ids:
-        reindex_conformers(mol)
+        reindex_conformers(new_mol)
+
+    return new_mol
 
 
-def remove_conformers(
-    mol: Chem.Mol, conf_ids: list[int], renumber_conf_ids: bool = True
-):
+def remove_conformers(mol: Chem.Mol, /, *, conf_ids: list[int], renumber_conf_ids: bool = True):
     """Remove specific conformers from an RDKit molecule in-place.
 
     Args:
@@ -253,7 +247,7 @@ def remove_conformers(
         reindex_conformers(mol)
 
 
-def remove_all_conformers(mol: Chem.Mol):
+def remove_all_conformers(mol: Chem.Mol, /):
     """Remove all conformers from an RDKit molecule in-place.
 
     Args:
@@ -266,18 +260,16 @@ def remove_all_conformers(mol: Chem.Mol):
         mol.RemoveConformer(conf_id)
 
 
-def conformer_as_mol(mol: Chem.Mol, /, cid: int) -> Chem.Mol:
+def conformer_as_mol(mol: Chem.Mol, /, *, conf_id: int) -> Chem.Mol:
     """Extract a single conformer from a multi-conformer molecule."""
     single_conf = Chem.Mol(mol)
     single_conf.RemoveAllConformers()
-    single_conf.AddConformer(mol.GetConformer(cid), assignId=True)
+    single_conf.AddConformer(mol.GetConformer(conf_id), assignId=True)
     single_mol = Chem.Mol(single_conf)
     return single_mol
 
 
-def embed(
-    mol: Chem.Mol, num_confs: int = 100, rmsd_threshold: float | None = None
-) -> Chem.Mol:
+def embed(mol: Chem.Mol, /, *, num_confs: int = 100, rmsd_threshold: float | None = None) -> Chem.Mol:
     """Embed `nconf` ETKDGv3 conformers and MMFF94‑optimise them in place."""
     params = AllChem.ETKDGv3()
     params.randomSeed = 0xC0FFEE
@@ -289,5 +281,39 @@ def embed(
     props = AllChem.MMFFGetMoleculeProperties(mol, mmffVariant="MMFF94")
     for cid in range(mol.GetNumConformers()):
         ff = AllChem.MMFFGetMoleculeForceField(mol, props, confId=cid)
-        ff.Minimize(maxIts=10000)
+        if ff:
+            ff.Minimize(maxIts=10000)
     return mol
+
+
+def remove_high_energy_conformers(
+    mol: Chem.Mol, /, *, energies: np.ndarray, energy_window: float = 50.0
+) -> Tuple[Chem.Mol, np.ndarray]:
+    """
+    Apply energy window filter then cluster conformers.
+
+    Args:
+        mol: RDKit molecule with conformers
+        energies: Array of energies for each conformer
+        rmsd_threshold: RMSD threshold for clustering
+        energy_window: Energy window in kcal/mol
+
+    Returns:
+        Tuple of (clustered_mol, clustered_energies)
+    """
+    # Energy window filter
+    min_energy = np.min(energies)
+    within_window = (energies - min_energy) <= energy_window
+    valid_indices = np.argwhere(within_window).flatten()
+
+    # Create filtered molecule
+    filtered_mol = Chem.Mol(mol)
+    filtered_mol.RemoveAllConformers()
+    for idx in valid_indices:
+        conf = mol.GetConformer(int(idx))
+        new_conf = Chem.Conformer(conf)
+        filtered_mol.AddConformer(new_conf, assignId=True)
+
+    # Cluster filtered conformers
+    filtered_energies = energies[valid_indices]
+    return filtered_mol, filtered_energies

@@ -1,27 +1,39 @@
-import subprocess
+import os
+import platform
 import tempfile
+from multiprocessing import cpu_count
 from pathlib import Path
 from typing import Literal
 
 import numpy as np
 from rdkit import Chem
 
-from cct.rdkit.io import from_xyz, to_xyz
+from cct.rdkit.io import rdkit_from_xyz, xyz_from_rdkit
+from cct.utils import run_command, setup_logger
+
+num_cpus = int(os.environ.get("NUM_CPUS", cpu_count()))
+logger = setup_logger(__name__)
 
 
 class CRESTError(Exception):
     pass
 
 
+def check_is_linux():
+    if platform.system() != "Linux":
+        raise OSError("CREST only works properly on Linux")
+
+
 def run_metadynamics(
     mol: Chem.Mol,
     charge: int = 0,
     multiplicity: int = 1,
-    num_cores: int = 1,
     method: Literal["gfn2", "gfn1", "gfn0"] = "gfn2",
     quick: bool = False,
+    solvent: Literal["water"] | None = None,
 ):
     """Run `crest singlepoint on an ensemble."""
+    check_is_linux()
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
 
@@ -29,7 +41,7 @@ def run_metadynamics(
         tmp_mid_xyz = tmpdir / "crest_ensemble.xyz"
         tmp_output_xyz = tmpdir / "crest_conformers.xyz"
 
-        to_xyz(mol, tmp_input_xyz)
+        xyz_from_rdkit(mol, tmp_input_xyz)
 
         cmd = [
             "crest",
@@ -42,9 +54,11 @@ def run_metadynamics(
             "--method",
             method,
             "-T",
-            str(num_cores),
+            str(num_cpus),
         ]
-        subprocess.run(cmd, cwd=tmpdir)
+        if solvent:
+            cmd += ["--alpb", solvent]
+        run_command(cmd, cwd=tmpdir)
 
         if not tmp_mid_xyz.exists():
             raise CRESTError("CREST optimisation failed")
@@ -59,18 +73,20 @@ def run_metadynamics(
             "--method",
             method,
             "-T",
-            str(num_cores),
+            str(num_cpus),
         ]
+        if solvent:
+            cmd += ["--alpb", solvent]
 
         if quick:
             cmd.append("--quick")
 
-        subprocess.run(cmd, cwd=tmpdir)
+        run_command(cmd, cwd=tmpdir)
 
         if not tmp_output_xyz.exists():
             raise CRESTError("CREST metadynamics failed")
 
-        mol = from_xyz(tmp_output_xyz, ref_mol=mol)
+        mol = rdkit_from_xyz(tmp_output_xyz, ref_mol=mol)
 
     return mol
 
@@ -80,12 +96,12 @@ def run_screen(
     screen_type: Literal["singlepoint", "optimise"],
     charge: int = 0,
     multiplicity: int = 1,
-    num_cores: int = 1,
     method: Literal["gfn2", "gfn1", "gfn0"] = "gfn2",
     rmsd_threshold: float = 0.125,
     conformer_energy_window: float = 0.05,
     energy_window: float = 6.0,
     rotational_threshold: float = 0.01,
+    solvent: Literal["water"] | None = None,
 ) -> tuple[Chem.Mol, np.ndarray[float]]:
     """Run CREST screening on molecular conformers.
 
@@ -95,7 +111,6 @@ def run_screen(
         screen_type: Type of screening to perform.
         charge: Molecular charge.
         multiplicity: Spin multiplicity.
-        num_cores: Number of CPU cores to use.
         method: QM method for calculations.
         rmsd_threshold: RMSD threshold for conformer filtering.
         conformer_energy_window: Energy window for conformer filtering.
@@ -107,29 +122,17 @@ def run_screen(
         Tuple of processed molecule and energy array.
 
     """
+    check_is_linux()
     match screen_type:
         case "singlepoint":
-            mol = run_singlepoint(
-                mol,
-                multiplicity=multiplicity,
-                charge=charge,
-                num_cores=num_cores,
-                method=method,
-            )
+            mol = run_singlepoint(mol, multiplicity=multiplicity, charge=charge, method=method, solvent=solvent)
         case "optimise":
-            mol = run_optimisation(
-                mol,
-                multiplicity=multiplicity,
-                charge=charge,
-                num_cores=num_cores,
-                method=method,
-            )
+            mol = run_optimisation(mol, multiplicity=multiplicity, charge=charge, method=method, solvent=solvent)
 
     mol = run_cregen(
         mol,
         multiplicity=multiplicity,
         charge=charge,
-        num_cores=num_cores,
         rmsd_threshold=rmsd_threshold,
         conformer_energy_window=conformer_energy_window,
         energy_window=energy_window,
@@ -145,17 +148,18 @@ def run_singlepoint(
     mol: Chem.Mol,
     charge: int = 0,
     multiplicity: int = 1,
-    num_cores: int = 1,
     method: Literal["gfn2", "gfn1", "gfn0"] = "gfn2",
+    solvent: Literal["water"] | None = None,
 ):
     """Run `crest optimisation on an ensemble."""
+    check_is_linux()
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
 
         tmp_input_xyz = tmpdir / "input.xyz"
         tmp_output_xyz = tmpdir / "crest_ensemble.xyz"
 
-        to_xyz(mol, tmp_input_xyz)
+        xyz_from_rdkit(mol, tmp_input_xyz)
 
         cmd = [
             "crest",
@@ -170,14 +174,16 @@ def run_singlepoint(
             "---method",
             method,
             "-T",
-            str(num_cores),
+            str(num_cpus),
         ]
-        subprocess.run(cmd, cwd=tmpdir)
+        if solvent:
+            cmd += ["--alpb", solvent]
+        run_command(cmd, cwd=tmpdir)
 
         if not tmp_output_xyz.exists():
             raise CRESTError("CREST singlepoint failed")
 
-        mol = from_xyz(tmp_output_xyz, ref_mol=mol)
+        mol = rdkit_from_xyz(tmp_output_xyz, ref_mol=mol)
 
     return mol
 
@@ -186,8 +192,8 @@ def run_optimisation(
     mol: Chem.Mol,
     charge: int = 0,
     multiplicity: int = 1,
-    num_cores: int = 1,
     method: Literal["gfn2", "gfn1", "gfn0"] = "gfn2",
+    solvent: Literal["water"] | None = None,
 ):
     """Run `crest singlepoint on an ensemble."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -196,7 +202,7 @@ def run_optimisation(
         tmp_input_xyz = tmpdir / "input.xyz"
         tmp_output_xyz = tmpdir / "crest_ensemble.xyz"
 
-        to_xyz(mol, tmp_input_xyz)
+        xyz_from_rdkit(mol, tmp_input_xyz)
 
         cmd = [
             "crest",
@@ -209,14 +215,16 @@ def run_optimisation(
             "--method",
             method,
             "-T",
-            str(num_cores),
+            str(num_cpus),
         ]
-        subprocess.run(cmd, cwd=tmpdir)
+        if solvent:
+            cmd += ["--alpb", solvent]
+        run_command(cmd, cwd=tmpdir)
 
         if not tmp_output_xyz.exists():
             raise CRESTError("CREST optimisation failed")
 
-        mol = from_xyz(tmp_output_xyz, ref_mol=mol)
+        mol = rdkit_from_xyz(tmp_output_xyz, ref_mol=mol)
     return mol
 
 
@@ -228,16 +236,16 @@ def run_cregen(
     conformer_energy_window: float = 0.05,
     energy_window: float = 6.0,
     rotational_threshold: float = 0.01,
-    num_cores: int = 1,
 ):
     """Run `crest --screen` and return the resulting `screen.xyz` path."""
+    check_is_linux()
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
 
         tmp_input_xyz = tmpdir / "input.xyz"
         tmp_output_xyz = tmpdir / "crest_ensemble.xyz"
 
-        to_xyz(mol, tmp_input_xyz)
+        xyz_from_rdkit(mol, tmp_input_xyz)
 
         cmd = [
             "crest",
@@ -257,14 +265,14 @@ def run_cregen(
             "--bthr",
             str(rotational_threshold),
             "-T",
-            str(num_cores),
+            str(num_cpus),
             "--notopo",
         ]
-        subprocess.run(cmd, cwd=tmpdir)
+        run_command(cmd, cwd=tmpdir)
 
         if not tmp_output_xyz.exists():
             raise CRESTError("CREST cregen failed")
 
-        mol = from_xyz(tmp_output_xyz, ref_mol=mol)
+        mol = rdkit_from_xyz(tmp_output_xyz, ref_mol=mol)
 
     return mol

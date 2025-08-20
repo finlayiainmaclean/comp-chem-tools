@@ -1,111 +1,146 @@
+import logging
+import os
+import random
 import subprocess
+import time
+from multiprocessing import cpu_count
 from pathlib import Path
-from typing import Any, Callable, List, Union
+from typing import Any, Callable
 
+import numpy as np
 import ray
+import torch
+from ase.units import kB
+from scipy.special import logsumexp
 from tqdm import tqdm
+
+MAX_NUM_CPUS = max(int(cpu_count() * 0.8), 1)
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
 
-def docker_run_cmd(
-    cmd: Union[str, List[str]],
-    image: str,
-    mount_dir: Union[str, Path],
-    workdir: str = "/data",
-    auto_remove: bool = True,
-    capture_output: bool = True,
-    stream_output: bool = True,
-    check: bool = True,
-):
-    """Run a command inside a Docker container using the Docker SDK.
+def setup_logger(name, log_level: str = os.getenv("LOG_LEVEL", "INFO").upper()):
+    logging.basicConfig(
+        level=getattr(logging, log_level, logging.INFO), format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    logger = logging.getLogger(name)
+    return logger
+
+
+logger = setup_logger(__name__)
+
+
+def get_best_device():
+    """Get the best available device: CUDA > MPS > CPU"""
+    if torch.cuda.is_available():
+        device = "cuda"
+    elif torch.backends.mps.is_available():
+        device = "mps"
+    else:
+        device = "cpu"
+    return device
+
+
+def get_cuda_or_cpu_device():
+    device = get_best_device()
+    if device == "mps":
+        device = "cpu"
+    return device
+
+
+device = get_best_device()
+print(f"Using device: {device}")
+
+
+def boltzmann_average_energy(energies, temperature=300.0):
+    energies = np.array(energies, dtype=np.float64)
+    beta = 1.0 / (kB * temperature)
+
+    # Calculate -beta * E_i
+    neg_beta_E = -beta * energies
+
+    # Calculate log partition function
+    log_Z = logsumexp(neg_beta_E)
+
+    # Calculate weights
+    log_weights = neg_beta_E - log_Z
+    weights = np.exp(log_weights)
+
+    return np.sum(energies * weights)
+
+
+def run_command(cmd, cwd=None, max_attempts=1, retry_delay=0.1, **kwargs):
+    """Run a command.
 
     Args:
-    ----
-        cmd: Command to run inside the container.
-        image: Docker image to use.
-        mount_dir: Host directory to mount.
-        workdir: Working directory inside container.
-        auto_remove: Automatically remove container after run.
-        capture_output: Return stdout/stderr as strings.
-        stream_output: Print output live.
-        check: Raise exception on non-zero exit.
-
-    Returns:
-    -------
-        dict with keys: 'exit_code', 'stdout', 'stderr'
-
+        cmd: Command to run
+        cwd: Working directory
+        max_attempts: Maximum number of attempts for recoverable errors
+        retry_delay: Base delay between retries (with jitter)
+        **kwargs: Additional arguments passed to subprocess.run
     """
-    import docker
 
-    client = docker.from_env()
+    for attempt in range(max_attempts):
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=cwd,
+                check=True,
+                capture_output=True,  # Capture both stdout and stderr
+                text=True,  # Return strings instead of bytes
+                **kwargs,
+            )
 
-    mount_path = Path(mount_dir).resolve()
-    volumes = {str(mount_path): {"bind": workdir, "mode": "rw"}}
+            # Success - log and return
+            logger.debug(f"Command succeeded: {' '.join(cmd) if isinstance(cmd, list) else cmd}")
 
-    if isinstance(cmd, list):
-        pass  # leave as-is
-    elif isinstance(cmd, str):
-        cmd = ["/bin/bash", "-c", cmd]  # run as bash script
-    else:
-        raise ValueError("cmd must be a str or list of str")
+            # Print stdout if there's content
+            if result.stdout:
+                logger.debug("Command output:")
+                logger.debug(result.stdout.rstrip())
 
-    container = client.containers.run(
-        image=image,
-        command=cmd,
-        volumes=volumes,
-        working_dir=workdir,
-        detach=True,
-        auto_remove=auto_remove,
-        stderr=True,
-        stdout=True,
-    )
+            # Optionally print stderr even on success (some commands output info to stderr)
+            if result.stderr:
+                logger.warning("Command stderr:")
+                logger.warning(result.stderr.rstrip())
 
-    stdout, stderr = "", ""
+            return result
 
-    if capture_output:
-        if stream_output:
-            for line in container.logs(stream=True):
-                print(line.decode(), end="")
-        else:
-            logs = container.logs(stdout=True, stderr=True)
-            stdout = logs.decode()
+        except subprocess.CalledProcessError as e:
+            # Don't retry CalledProcessError - these are actual command failures
+            logger.error(f"Command failed with return code {e.returncode}")
+            logger.error(f"Command: {' '.join(cmd) if isinstance(cmd, list) else cmd}")
 
-    exit_code = container.wait()["StatusCode"]
+            if e.stdout:
+                logger.error("STDOUT:")
+                logger.error(e.stdout)
 
-    if check and exit_code != 0:
-        raise RuntimeError(
-            f"Docker command failed with code {exit_code}: {stderr or stdout}"
-        )
+            if e.stderr:
+                logger.error("STDERR:")
+                logger.error(e.stderr)
 
-    return {"exit_code": exit_code, "stdout": stdout, "stderr": stderr}
+            raise  # Re-raise the exception
 
+        except (OSError, Exception) as e:
+            # Retry on OSError (like "Text file busy")
+            if attempt < max_attempts - 1:
+                if e.errno == 26:  # Text file busy
+                    logger.warning(f"Text file busy error, retrying ({attempt + 1}/{max_attempts})")
+                else:
+                    logger.warning(f"OS error ({e.errno}: {e.strerror}), retrying ({attempt + 1}/{max_attempts})")
 
-def run_command(cmd, cwd=None, **kwargs):
-    """Run a command and only print stdout/stderr if there's an error."""
-    try:
-        result = subprocess.run(
-            cmd,
-            cwd=cwd,
-            check=True,
-            capture_output=True,  # Capture both stdout and stderr
-            text=True,  # Return strings instead of bytes
-            **kwargs,
-        )
-        return result
-    except subprocess.CalledProcessError as e:
-        print(f"Command failed with return code {e.returncode}")
-        print(f"Command: {' '.join(cmd) if isinstance(cmd, list) else cmd}")
+                # Add jittered delay to avoid thundering herd
+                delay = retry_delay * (2**attempt) + random.uniform(0, 0.1)
+                time.sleep(delay)
+                continue
+            else:
+                # Final attempt failed
+                logger.error(f"Command failed after {max_attempts} attempts with OS error: {e}")
+                logger.error(f"Command: {' '.join(cmd) if isinstance(cmd, list) else cmd}")
+                raise
 
-        if e.stdout:
-            print("STDOUT:")
-            print(e.stdout)
-
-        if e.stderr:
-            print("STDERR:")
-            print(e.stderr)
-
-        raise  # Re-raise the exception
+    # Should never reach here, but just in case
+    raise RuntimeError(f"Command failed after {max_attempts} attempts")
 
 
 def batch_run(
@@ -132,22 +167,18 @@ def batch_run(
 
     """
     if run_local:
-        print("Creating locally sequentially")
-        results = [func(*input) for input in inputs]
+        results = [func(*input) for input in tqdm(inputs)]
     else:
         CREATED_RAY_CLUSTER = False
         if not ray.is_initialized():
-            print("Creating local ray cluster")
             CREATED_RAY_CLUSTER = True
-            ray.init()
+            ray.init(num_cpus=int(os.environ.get("NUM_CPUS", MAX_NUM_CPUS)))
         inputs = [(i,) if type(i) is not tuple else i for i in inputs]
-        pbar = tqdm(
-            total=len(inputs), unit=" ray jobs", mininterval=60, position=0, leave=True
-        )
+        pbar = tqdm(total=len(inputs), unit=" ray jobs", mininterval=60, position=0, leave=True)
         ray_func = ray.remote(func)
         if ray_kwargs:
             ray_func = ray_func.options(**ray_kwargs)
-        futures = [ray_func.remote(*i) for i in inputs]
+        futures = [ray_func.remote(*i) for i in tqdm(inputs)]
         remaining = futures
         total = len(futures)
         while remaining:

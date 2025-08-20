@@ -7,6 +7,7 @@ from rdkit.Chem import AllChem
 from rdkit.Geometry import Point3D
 from scipy.spatial.distance import cdist
 
+from cct.rdkit.conformers import has_conformer
 from cct.rdkit.mmff import mmff_optimise
 
 logger = logging.getLogger(__name__)
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 def get_coordinates(mol: Chem.Mol, conf_id: int | None = 0) -> np.ndarray:
     """Get coordinates from molecular conformer."""
+    conf_id = int(conf_id)
     coords = mol.GetConformer(conf_id).GetPositions()
     return coords
 
@@ -47,27 +49,25 @@ def set_zero_coordinates(mol: Chem.Mol):
     mol.AddConformer(conf, assignId=True)
 
 
-def set_coordinates(mol: Chem.Mol, coords: np.ndarray, conf_id: int = -1):
+def set_coordinates(mol: Chem.Mol, coords: np.ndarray, conf_id: int = 0):
     """Overwrite (or create) conformer with supplied Cartesian coordinates.
 
     Overwrites (or creates) conformer `conf_id` with the supplied
     Cartesian coordinates (Å).  `coords` must be shape (N_atoms, 3).
     """
+    conf_id = int(conf_id)
     n_atoms = mol.GetNumAtoms()
     if coords.shape != (n_atoms, 3):
-        raise ValueError(
-            f"coords shape {coords.shape} does not match atom count {n_atoms}"
-        )
+        raise ValueError(f"coords shape {coords.shape} does not match atom count {n_atoms}")
 
     # make sure the conformer exists
-    if mol.GetNumConformers() == 0:
-        raise ValueError("No conformer - use `set_random_coordinates`")
+    if not has_conformer(mol, conf_id=conf_id):
+        conf = Chem.Conformer(n_atoms)
+        conf.SetId(conf_id)
+        mol.AddConformer(conf)
 
     conf = mol.GetConformer(conf_id)
-
-    # write xyz into the conformer
-    for idx, (x, y, z) in enumerate(coords.astype(float)):
-        conf.SetAtomPosition(idx, Point3D(x, y, z))
+    conf.SetPositions(coords)
 
 
 def transplant_coordinates(ref: Chem.Mol, query: Chem.Mol) -> Chem.Mol:
@@ -106,9 +106,7 @@ def transplant_coordinates(ref: Chem.Mol, query: Chem.Mol) -> Chem.Mol:
     q_ix = np.array(q_ix)
     r_ix = np.array(r_ix)
 
-    query_coords[q_ix] = ref_coords[
-        r_ix
-    ]  # Replace coords of any atom under distance threshold
+    query_coords[q_ix] = ref_coords[r_ix]  # Replace coords of any atom under distance threshold
 
     set_coordinates(query, query_coords)
 

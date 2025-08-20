@@ -9,7 +9,7 @@ USER root
 
 
 # Install wget (not included in base)
-RUN apt-get update && apt-get install -y --no-install-recommends wget nano build-essential cmake && \
+RUN apt-get update && apt-get install -y --no-install-recommends wget nano git build-essential cmake && \
     rm -rf /var/lib/apt/lists/*
 
 
