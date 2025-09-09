@@ -7,7 +7,6 @@ from typing import Literal
 
 import numpy as np
 import pymsym
-from aimnet.calculators import AIMNet2ASE
 from ase import Atoms
 from ase.calculators.calculator import Calculator, all_changes
 from ase.calculators.nwchem import NWChem
@@ -31,7 +30,6 @@ QM_METHODS = Literal[
     "UMA_MEDIUM",
     "UMA_SMALL",
     "EMT",
-    "AIMNet2",
     "NWCHEM",
     # "MACE_SMALL",
     # "MACE_MEDIUM",
@@ -60,8 +58,6 @@ def get_calc(method: QM_METHODS, solvent: Literal["water"] | None = None, charge
 
     """
     match method:
-        case "AIMNet2":
-            calc = AIMNet2ASE()
         case "EMT":
             from ase.calculators.emt import EMT
 
@@ -133,6 +129,9 @@ def get_calc(method: QM_METHODS, solvent: Literal["water"] | None = None, charge
             if solvent:
                 calc.set(cosmo={"do_cosmo_smd": "true", "solvent": solvent})
 
+        # case "AIMNet2":
+        #     from aimnet.calculators import AIMNet2ASE
+        #     calc = AIMNet2ASE()
         # case "eSEN-S":
         #     from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
@@ -264,12 +263,7 @@ def ase_singlepoint(
         calc.set(multiplicity=multiplicity)
         calc.set(spin=spin)
 
-    if isinstance(calc, AIMNet2ASE):
-        calc.set_charge(charge)
-        calc.set_atoms(atoms)
-        calc.set_mult(multiplicity)
-    else:
-        atoms.calc = calc
+    atoms.calc = calc
 
     with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
         calc.calculate(atoms, properties=["energy"], system_changes=all_changes)

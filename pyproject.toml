@@ -46,6 +46,7 @@ freesasa = "*"
 
 [tool.pixi.feature.dev.pypi-dependencies]
 # Pip dependencies
+cct = {path = ".", editable = true}
 ruff = ">=0.12"
 mypy = ">=1.17"
 pytest = "*"
@@ -67,6 +68,7 @@ lint = "ruff check $PIXI_PROJECT_ROOT"
 fix = "ruff check --fix $PIXI_PROJECT_ROOT"
 typecheck = "mypy $PIXI_PROJECT_ROOT"
 test = "pytest $PIXI_PROJECT_ROOT"
+jupyter = "jupyter notebook"
 
 [tool.pixi.environments]
 default = {features = ["dev"], solve-group = "default"}

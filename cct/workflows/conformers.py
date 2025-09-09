@@ -91,7 +91,7 @@ def generate_conformers(
     /,
     *,
     mode: MODES = "rapid",
-    qm_method: QM_METHODS = "AIMNet2",
+    qm_method: QM_METHODS = "UMA_MEDIUM",
     charge: int | None = None,
     multiplicity: int = 1,
     solvent: Literal["water"] | None = None,
