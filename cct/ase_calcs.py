@@ -7,8 +7,6 @@ from typing import Literal
 
 import numpy as np
 import pymsym
-import torch
-import wget
 from aimnet.calculators import AIMNet2ASE
 from ase import Atoms
 from ase.calculators.calculator import Calculator, all_changes
@@ -20,7 +18,6 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 
 from cct.gxtb import gxTBCalculator
-from cct.molsolv import MolSolvCalculator
 from cct.rdkit.coordinates import set_coordinates
 from cct.rdkit.io import ase_from_rdkit
 from cct.utils import PROJECT_ROOT, batch_run, get_best_device, get_cuda_or_cpu_device
@@ -28,10 +25,6 @@ from cct.utils import PROJECT_ROOT, batch_run, get_best_device, get_cuda_or_cpu_
 QM_METHODS = Literal[
     "ANI1x",
     "ANI2x",
-    "MACE_SMALL",
-    "MACE_MEDIUM",
-    "MACE_LARGE",
-    "EGRET1",
     "GFN1-xTB",
     "GFN2-xTB",
     "gxTB",
@@ -40,9 +33,13 @@ QM_METHODS = Literal[
     "EMT",
     "AIMNet2",
     "NWCHEM",
+    # "MACE_SMALL",
+    # "MACE_MEDIUM",
+    # "MACE_LARGE",
+    # "EGRET1",
 ]
 
-EGRET1_URL = "https://github.com/rowansci/egret-public/raw/refs/heads/master/compiled_models/EGRET_1.model"
+# EGRET1_URL = "https://github.com/rowansci/egret-public/raw/refs/heads/master/compiled_models/EGRET_1.model"
 RUN_LOCAL = eval(os.environ.get("RUN_LOCAL", "False"))
 device = get_best_device()
 cuda_or_cpu_device = get_cuda_or_cpu_device()
@@ -69,10 +66,18 @@ def get_calc(method: QM_METHODS, solvent: Literal["water"] | None = None, charge
             from ase.calculators.emt import EMT
 
             calc = EMT()
-        case "eSEN-S":
+        case "UMA_SMALL":
             from fairchem.core import FAIRChemCalculator, pretrained_mlip
+            from fairchem.core.units.mlip_unit import load_predict_unit
 
-            predictor = pretrained_mlip.get_predict_unit("esen-sm-conserving-all-omol", device="cpu")
+            atom_refs = pretrained_mlip.get_isolated_atomic_energies("uma-s-1p1", "/tmp")
+            predictor = load_predict_unit(
+                PROJECT_ROOT / "models" / "uma-s-1p1.pt",
+                inference_settings="default",
+                overrides=None,
+                device=cuda_or_cpu_device,
+                atom_refs=atom_refs,
+            )
             calc = FAIRChemCalculator(predictor, task_name="omol")
         case "UMA_MEDIUM":
             from fairchem.core import FAIRChemCalculator, pretrained_mlip
@@ -87,37 +92,6 @@ def get_calc(method: QM_METHODS, solvent: Literal["water"] | None = None, charge
                 atom_refs=atom_refs,
             )
             calc = FAIRChemCalculator(predictor, task_name="omol")
-        case "UMA_SMALL":
-            from fairchem.core import FAIRChemCalculator, pretrained_mlip
-            from fairchem.core.units.mlip_unit import load_predict_unit
-
-            atom_refs = pretrained_mlip.get_isolated_atomic_energies("uma-s-1p1", "/tmp")
-            predictor = load_predict_unit(
-                PROJECT_ROOT / "models" / "uma-s-1p1.pt",
-                inference_settings="default",
-                overrides=None,
-                device=cuda_or_cpu_device,
-                atom_refs=atom_refs,
-            )
-            calc = FAIRChemCalculator(predictor, task_name="omol")
-        case "MACE_SMALL":
-            from mace.calculators import mace_off
-
-            calc = mace_off(model="small", device="cpu", default_dtype="float32")
-            calc.device = torch.device(device)
-            calc.models = [model.to(device) for model in calc.models]
-        case "MACE_MEDIUM":
-            from mace.calculators import mace_off
-
-            calc = mace_off(model="medium", device="cpu", default_dtype="float32")
-            calc.device = torch.device(device)
-            calc.models = [model.to(device) for model in calc.models]
-        case "MACE_LARGE":
-            from mace.calculators import mace_off
-
-            calc = mace_off(model="large", device="cpu", default_dtype="float32")
-            calc.device = torch.device(device)
-            calc.models = [model.to(device) for model in calc.models]
         case "ANI1x":
             import torchani
 
@@ -126,22 +100,6 @@ def get_calc(method: QM_METHODS, solvent: Literal["water"] | None = None, charge
             import torchani
 
             calc = torchani.models.ANI2x().ase()
-        case "EGRET1":
-            from mace.calculators import mace_off
-
-            egret1_path = PROJECT_ROOT / "data" / "EGRET_1.model"
-
-            if not egret1_path.exists():
-                print("Downloading EGRET1 model")
-
-                wget.download(
-                    EGRET1_URL,
-                    out=str(egret1_path),
-                )
-
-            calc = mace_off(model=egret1_path, device="cpu", default_dtype="float32")
-            calc.device = torch.device(device)
-            calc.models = [model.to(device) for model in calc.models]
         case "gxTB":
             calc = gxTBCalculator(charge=charge, multiplicity=multiplicity)
         case "GFN1-xTB" | "GFN2-xTB":
@@ -175,9 +133,43 @@ def get_calc(method: QM_METHODS, solvent: Literal["water"] | None = None, charge
             if solvent:
                 calc.set(cosmo={"do_cosmo_smd": "true", "solvent": solvent})
 
-        case "MolSolv":
-            calc = MolSolvCalculator()
+        # case "eSEN-S":
+        #     from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
+        #     predictor = pretrained_mlip.get_predict_unit("esen-sm-conserving-all-omol", device="cpu")
+        #     calc = FAIRChemCalculator(predictor, task_name="omol")
+        # case "MACE_SMALL":
+        #     from mace.calculators import mace_off
+
+        #     calc = mace_off(model="small", device="cpu", default_dtype="float32")
+        #     calc.device = torch.device(device)
+        #     calc.models = [model.to(device) for model in calc.models]
+        # case "MACE_MEDIUM":
+        #     from mace.calculators import mace_off
+        #     calc = mace_off(model="medium", device="cpu", default_dtype="float32")
+        #     calc.device = torch.device(device)
+        #     calc.models = [model.to(device) for model in calc.models]
+        # case "MACE_LARGE":
+        #     from mace.calculators import mace_off
+        #     calc = mace_off(model="large", device="cpu", default_dtype="float32")
+        #     calc.device = torch.device(device)
+        #     calc.models = [model.to(device) for model in calc.models]
+        # case "EGRET1":
+        #     from mace.calculators import mace_off
+
+        #     egret1_path = PROJECT_ROOT / "data" / "EGRET_1.model"
+
+        #     if not egret1_path.exists():
+        #         print("Downloading EGRET1 model")
+
+        #         wget.download(
+        #             EGRET1_URL,
+        #             out=str(egret1_path),
+        #         )
+
+        #     calc = mace_off(model=egret1_path, device="cpu", default_dtype="float32")
+        #     calc.device = torch.device(device)
+        #     calc.models = [model.to(device) for model in calc.models]
     return calc
 
 
@@ -211,6 +203,7 @@ def ase_optimise(
         calc = calc.copy()
 
     atoms.info.update({"charge": charge})
+    atoms.info.update({"multiplicity": multiplicity})
     calc.set(charge=charge)
     if not isinstance(calc, NWChem):
         spin = (multiplicity - 1) // 2
@@ -218,9 +211,11 @@ def ase_optimise(
         calc.set(multiplicity=multiplicity)
         calc.set(spin=spin)
 
-    if isinstance(calc, AIMNet2ASE):
+    if hasattr(calc, "set_charge") and callable(calc.set_charge):
         calc.set_charge(charge)
+    if hasattr(calc, "set_atoms") and callable(calc.set_atoms):
         calc.set_atoms(atoms)
+    if hasattr(calc, "set_mult") and callable(calc.set_mult):
         calc.set_mult(multiplicity)
     else:
         atoms.calc = calc
@@ -295,7 +290,7 @@ class CalculatorFactory:
         /,
         *,
         multiplicity: int = 1,
-        method: Literal["GFN2-xTB", "MolSolv"] = "GFN2-xTB",
+        method: Literal["GFN2-xTB"] = "GFN2-xTB",
         charge: int | None = None,
         solvent: Literal["water"] = "water",
     ):
@@ -319,12 +314,7 @@ class CalculatorFactory:
             case "GFN2-xTB":
                 E_solvated = self.singlepoint_mol(mol, method="GFN2-xTB", solvent=solvent, multiplicity=multiplicity)
                 E_gas = self.singlepoint_mol(mol, method="GFN2-xTB", solvent=None, charge=charge)
-
                 E_solv = E_solvated - E_gas
-            case "MolSolv":
-                if solvent != "water":
-                    raise ValueError("MolSolv only predicts water solvation energies")
-                E_solv = self.singlepoint_mol(mol, method="MolSolv", charge=charge)
         return E_solv
 
     def singlepoint_mol(
@@ -649,7 +639,6 @@ if __name__ == "__main__":
     print(time.time() - t0)
 
     # g = calcs.solvation_energy_mol(mol, method="GFN2-xTB", solvent="water")*23
-    # g1 = calcs.solvation_energy_mol(mol, method="MolSolv", solvent="water")*23
 
     # print(g,g1,g-g1)
 

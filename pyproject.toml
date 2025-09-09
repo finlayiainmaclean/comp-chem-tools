@@ -1,43 +1,72 @@
-[tool.poetry]
-name = "comp-chem-tools"
+[project]
+dependencies = []
+name = "cct"
+requires-python = ">= 3.10"
 version = "0.1.0"
-description = "A simple Python package"
-authors = ["finlayiainmaclean@gmail.com"]
-license = "MIT"
-readme = "README.rst"
-packages = [{ include = "cct" }]
-homepage = "https://github.com/finlayiainmaclean/cct"
-repository = "https://github.com/finlayiainmaclean/cct"
-keywords = ["numpy"]
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
-]
 
-[tool.poetry.dependencies]
-python = "^3.10"
-numpy = "^1.26"
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.2"
-black = "^24.4"
-mypy = "^1.10"
-pre-commit = "^3.7.0"
-
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[tool.setuptools]
+packages = ["cct"]
 
 [tool.ruff]
-line-length = 88
-target-version = "py310"
+line-length = 120
 
 [tool.ruff.lint]
-extend-select = ["E", "F", "B", "I", "W", "C4", "D"]
-ignore = ["D100", "D101", "D205"]  # adjust to taste
+select = ["ALL"]
 
-[tool.ruff.format]
-quote-style = "double"
-line-ending = "auto"
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN", "D", "S101"]
+
+[tool.mypy]
+strict = true
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["osx-arm64"]
+
+
+[tool.pixi.feature.dev.dependencies]
+# Conda dependencies
+python = "3.10.*"
+crest = "*"
+xtb = "*"
+libgfortran = "14.2.0.*"
+click = "*"
+rdkit = "*"
+tblite-python = ">=0.4.0"
+tblite = ">=0.4.0"
+jupyter = "*"
+nwchem = "*"
+openbabel = "*"
+freesasa = "*"
+
+
+[tool.pixi.feature.dev.pypi-dependencies]
+# Pip dependencies
+ruff = ">=0.12"
+mypy = ">=1.17"
+pytest = "*"
+torch = "*"
+torchani = "*"
+torch_geometric = "*"
+fairchem-core = "*"
+e3nn = "*"
+wget = "*"
+pymsym = "*"
+datamol = "*"
+p_tqdm = "*"
+ray = "*"
+
+
+[tool.pixi.feature.dev.tasks]
+format = "ruff format $PIXI_PROJECT_ROOT"
+lint = "ruff check $PIXI_PROJECT_ROOT"
+fix = "ruff check --fix $PIXI_PROJECT_ROOT"
+typecheck = "mypy $PIXI_PROJECT_ROOT"
+test = "pytest $PIXI_PROJECT_ROOT"
+
+[tool.pixi.environments]
+default = {features = ["dev"], solve-group = "default"}

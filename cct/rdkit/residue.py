@@ -1,9 +1,7 @@
 from rdkit import Chem
 
 
-def set_residue_info(
-    mol: Chem.Mol, chain_id: str = "Z", resname: str = "LIG", resnum: int = 999
-):
+def set_residue_info(mol: Chem.Mol, chain_id: str = "Z", resname: str = "LIG", resnum: int = 999):
     """Mutate mol in-place so atoms belong to same PDB residue.
 
     Mutates `mol` in-place so that all atoms belong to the same PDB
@@ -16,9 +14,7 @@ def set_residue_info(
     • `resnum` must be 1–9999 to stay within PDB formatting limits.
     """
     # Roundtrip to PDB to set the PDB residue info.
-    mol_copy = Chem.MolFromPDBBlock(
-        Chem.MolToPDBBlock(mol), sanitize=False, removeHs=False
-    )
+    mol_copy = Chem.MolFromPDBBlock(Chem.MolToPDBBlock(mol), sanitize=False, removeHs=False)
 
     if len(chain_id) != 1:
         raise ValueError("PDB chain IDs are exactly one character")

@@ -30,8 +30,7 @@ def assert_all_hydrogens_explicit(mol: Chem.Mol):
         n_implicit = atom.GetNumImplicitHs()
         if n_implicit > 0:
             raise ImplicitHydrogenError(
-                f"Atom {atom.GetIdx()} ({atom.GetSymbol()}) still has "
-                f"{n_implicit} implicit hydrogen(s)"
+                f"Atom {atom.GetIdx()} ({atom.GetSymbol()}) still has {n_implicit} implicit hydrogen(s)"
             )
 
 
@@ -56,6 +55,5 @@ def assert_all_hydrogens_implicit(mol: Chem.Mol):
         n_explicit = atom.GetNumExplicitHs()
         if n_explicit > 0:
             raise ExplicitHydrogenError(
-                f"Atom {atom.GetIdx()} ({atom.GetSymbol()}) still has "
-                f"{n_explicit} explicit hydrogen(s)"
+                f"Atom {atom.GetIdx()} ({atom.GetSymbol()}) still has {n_explicit} explicit hydrogen(s)"
             )

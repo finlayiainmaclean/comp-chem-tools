@@ -149,6 +149,17 @@ class MoleculeViewer(anywidget.AnyWidget):
             return `A${atomIndex + 1}`;
         }
         
+        function parsePropertyList(value) {
+            // Support both comma-separated values and bracket notation
+            // e.g., "-0.1,2,1." or "[-0.1,2,1.]"
+            let cleanValue = value;
+            if (typeof value === 'string' && value.trim().startsWith('[') && value.trim().endsWith(']')) {
+                // Remove brackets from bracket notation
+                cleanValue = value.trim().slice(1, -1);
+            }
+            return cleanValue.split(',').map(v => v.trim());
+        }
+        
         function createAtomSubTabs() {
             const atomPropKeys = Object.keys(validAtomProperties);
             if (atomPropKeys.length === 0) {
@@ -176,7 +187,7 @@ class MoleculeViewer(anywidget.AnyWidget):
             const selectedProp = currentAtomProperty || atomPropKeys[0];
             currentAtomProperty = selectedProp;
             
-            const values = validAtomProperties[selectedProp].split(',').map(v => v.trim());
+            const values = parsePropertyList(validAtomProperties[selectedProp]);
             const atomNames = generateAtomNames(atomElements, values.length);
             
             let tableHtml = '<table style="width: 100%; border-collapse: collapse; font-size: 16.5px;">';
@@ -187,7 +198,7 @@ class MoleculeViewer(anywidget.AnyWidget):
             const atomTableData = [];
             values.forEach((value, index) => {
                 // Skip NaN values
-                if (value.toLowerCase() === 'nan' || value.toLowerCase() === 'n/a' || value.trim() === '') {
+                if (value.toLowerCase() === 'nan' || value.toLowerCase() === 'n/a' || value.toLowerCase() === 'none' || value.trim() === '') {
                     return;
                 }
                 
@@ -244,7 +255,7 @@ class MoleculeViewer(anywidget.AnyWidget):
             const selectedProp = currentBondProperty || bondPropKeys[0];
             currentBondProperty = selectedProp;
             
-            const values = validBondProperties[selectedProp].split(',').map(v => v.trim());
+            const values = parsePropertyList(validBondProperties[selectedProp]);
             
             let tableHtml = '<table style="width: 100%; border-collapse: collapse; font-size: 16.5px;">';
             tableHtml += '<thead><tr><th style="border-bottom: 1px solid #ddd; padding: 8px; text-align: left; color: #2e7d32;">Bond</th><th id="bond-value-header" style="border-bottom: 1px solid #ddd; padding: 8px; text-align: right; color: #2e7d32; cursor: pointer; user-select: none;">Value <span id="sort-arrow" style="font-size: 12px;">↕</span></th></tr></thead>';
@@ -254,7 +265,7 @@ class MoleculeViewer(anywidget.AnyWidget):
             const bondTableData = [];
             values.forEach((value, index) => {
                 // Skip NaN values
-                if (value.toLowerCase() === 'nan' || value.toLowerCase() === 'n/a' || value.trim() === '') {
+                if (value.toLowerCase() === 'nan' || value.toLowerCase() === 'n/a' || value.toLowerCase() === 'none' || value.trim() === '') {
                     return;
                 }
                 
@@ -680,7 +691,7 @@ class MoleculeViewer(anywidget.AnyWidget):
                 
                 // Only add property spheres if toggle is enabled
                 if (showPropertySpheres) {
-                    const values = validAtomProperties[currentAtomProperty].split(',').map(v => parseFloat(v.trim()));
+                    const values = parsePropertyList(validAtomProperties[currentAtomProperty]).map(v => parseFloat(v.trim()));
                     const atoms = viewer.getModel().selectedAtoms({});
                     
                     if (atoms && atoms.length > 0) {
@@ -771,7 +782,7 @@ class MoleculeViewer(anywidget.AnyWidget):
                 
                 // Only add property cylinders if toggle is enabled
                 if (showPropertyCylinders) {
-                    const values = validBondProperties[currentBondProperty].split(',').map(v => v.trim());
+                    const values = parsePropertyList(validBondProperties[currentBondProperty]);
                     const atoms = viewer.getModel().selectedAtoms({});
                     
                     if (atoms && atoms.length > 0 && bondData.length > 0) {
@@ -782,7 +793,7 @@ class MoleculeViewer(anywidget.AnyWidget):
                             
                             const numericValue = parseFloat(value);
                             if (!isNaN(numericValue) && isFinite(numericValue) && 
-                                value.toLowerCase() !== 'nan' && value.toLowerCase() !== 'n/a' && value !== '') {
+                                value.toLowerCase() !== 'nan' && value.toLowerCase() !== 'n/a' && value.toLowerCase() !== 'none' && value !== '') {
                                 validBonds.push({
                                     index: index,
                                     value: numericValue,
@@ -972,7 +983,9 @@ class MoleculeViewer(anywidget.AnyWidget):
                         }
                     });
                     
+                    // Fit and zoom molecule to optimal viewing level
                     viewer.zoomTo();
+                    viewer.zoom(2); // Zoom in for better visibility
                     viewer.render();
                 } catch (error) {
                     console.error('Error rendering molecule:', error);
@@ -994,8 +1007,8 @@ class MoleculeViewer(anywidget.AnyWidget):
                     const displayKey = key.replace(/^(mol_|atom_|bond_)/, '');
                     
                     if (key.startsWith('atom_') && typeof value === 'string' && value.includes(',')) {
-                        const parts = value.split(',').map(v => v.trim());
-                        if (parts.every(v => v.toLowerCase() === 'nan' || v.toLowerCase() === 'n/a' || v === '' || (!isNaN(parseFloat(v)) && isFinite(parseFloat(v))))) {
+                        const parts = parsePropertyList(value);
+                        if (parts.every(v => v.toLowerCase() === 'nan' || v.toLowerCase() === 'n/a' || v.toLowerCase() === 'none' || v === '' || (!isNaN(parseFloat(v)) && isFinite(parseFloat(v))))) {
                             if (parts.length === numAtoms || parts.length === numAtomsNoH) {
                                 validAtomProperties[displayKey] = value;
                             }
@@ -1004,8 +1017,8 @@ class MoleculeViewer(anywidget.AnyWidget):
                     }
                     
                     if (key.startsWith('bond_') && typeof value === 'string' && value.includes(',')) {
-                        const parts = value.split(',').map(v => v.trim());
-                        if (parts.every(v => v.toLowerCase() === 'nan' || v.toLowerCase() === 'n/a' || v === '' || (!isNaN(parseFloat(v)) && isFinite(parseFloat(v))))) {
+                        const parts = parsePropertyList(value);
+                        if (parts.every(v => v.toLowerCase() === 'nan' || v.toLowerCase() === 'n/a' || v.toLowerCase() === 'none' || v === '' || (!isNaN(parseFloat(v)) && isFinite(parseFloat(v))))) {
                             if (parts.length === numBonds) {
                                 validBondProperties[displayKey] = value;
                             }

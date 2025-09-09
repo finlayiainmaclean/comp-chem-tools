@@ -26,7 +26,7 @@ RUN_LOCAL = eval(os.environ.get("RUN_LOCAL", "False"))
 max_conformers_qm = 5
 energy_window = 5 / EV2KCALMOL
 qm_method = "eSEN-S"
-solv_method = "MolSolv"  # "GFN2-xTB"
+solv_method = "GFN2-xTB"
 calculate_thermo = False
 
 

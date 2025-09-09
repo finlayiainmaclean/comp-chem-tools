@@ -8,7 +8,6 @@ dependencies:
   - xtb
   - libgfortran=14.2.0
   - click
-  - crest
   - rdkit
   - tblite-python>=0.4.0
   - tblite>=0.4.0
@@ -19,7 +18,8 @@ dependencies:
   - pip:
     - torch
     - torchani
-    # - mace_torch==0.3.12
+    - torch_geometric
+    - fairchem-core
     - e3nn
     - wget
     - pymsym
@@ -27,5 +27,7 @@ dependencies:
     - p_tqdm
     - ray
     - git+https://github.com/isayevlab/aimnetcentral.git
-    - torch_geometric
-    - fairchem-core
+    # - torch_scatter
+    # - mace_torch==0.3.12
+
+

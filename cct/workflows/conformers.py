@@ -160,7 +160,9 @@ def generate_conformers(
     )
     if solvent == "water":
         # Solvation energy
-        solvation_energies = calcs.solvation_energy_mol(mol, multiplicity=multiplicity, charge=charge, method="MolSolv")
+        solvation_energies = calcs.solvation_energy_mol(
+            mol, multiplicity=multiplicity, charge=charge, method="GFN2-xTB"
+        )
 
         # Combined energies
         energies = energies + solvation_energies
