@@ -1,6 +1,5 @@
 import re
 import shutil
-import subprocess
 import tarfile
 import tempfile
 import urllib.request
@@ -176,11 +175,8 @@ class gxTBCalculator(Calculator):
 
         # Run calculation and save output
         with open(output_file, "w") as f:
-            result = subprocess.run(cmd, cwd=tmpdir, capture_output=True, text=True)
+            result = run_command(cmd, cwd=tmpdir)
             f.write(result.stdout)
-            if result.stderr:
-                f.write("\n--- STDERR ---\n")
-                f.write(result.stderr)
 
         # Parse energy from output
         energy_file = tmpdir / "energy"

@@ -54,7 +54,7 @@ def func(smi, atom_idx, method="gxTB"):
 
 
 if __name__ == "__main__":
-    qm_method = "UMA_SMALL"  # "gxTB"
+    qm_method = "gxTB"  # "gxTB"
     df = pd.read_csv("data/supporting-information.csv")
     df = df[df.columns[:6].tolist() + ["eSEN-S", "GFN2-xTB"]]
 

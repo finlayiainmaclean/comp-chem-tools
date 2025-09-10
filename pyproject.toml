@@ -7,6 +7,7 @@ version = "0.1.0"
 [tool.setuptools]
 packages = ["cct"]
 
+
 [tool.ruff]
 line-length = 120
 
@@ -23,9 +24,9 @@ strict = true
 pythonpath = ["."]
 
 
-[tool.pixi.workspace]
+[tool.pixi.project]
 channels = ["conda-forge"]
-platforms = ["osx-arm64"]
+platforms = ["osx-arm64", "linux-aarch64"]
 
 
 [tool.pixi.feature.dev.dependencies]

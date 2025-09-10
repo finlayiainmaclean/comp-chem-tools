@@ -277,12 +277,7 @@ def embed(mol: Chem.Mol, /, *, num_confs: int = 100, rmsd_threshold: float | Non
         params.pruneRmsThresh = rmsd_threshold
     params.numThreads = 0  # use all cores for embedding
     AllChem.EmbedMultipleConfs(mol, numConfs=num_confs, params=params)
-
-    props = AllChem.MMFFGetMoleculeProperties(mol, mmffVariant="MMFF94")
-    for cid in range(mol.GetNumConformers()):
-        ff = AllChem.MMFFGetMoleculeForceField(mol, props, confId=cid)
-        if ff:
-            ff.Minimize(maxIts=10000)
+    AllChem.MMFFOptimizeMoleculeConfs(mol, maxIters=10000)
     return mol
 
 

@@ -307,7 +307,9 @@ class CalculatorFactory:
         match method:
             case "GFN2-xTB":
                 E_solvated = self.singlepoint_mol(mol, method="GFN2-xTB", solvent=solvent, multiplicity=multiplicity)
-                E_gas = self.singlepoint_mol(mol, method="GFN2-xTB", solvent=None, charge=charge)
+                E_gas = self.singlepoint_mol(
+                    mol, method="GFN2-xTB", solvent=None, charge=charge, multiplicity=multiplicity
+                )
                 E_solv = E_solvated - E_gas
         return E_solv
 
@@ -405,6 +407,7 @@ class CalculatorFactory:
             geometry="nonlinear",
             symmetrynumber=symmetry_number,
             spin=spin,
+            ignore_imag_modes=True,
         )
 
         G = thermo.get_gibbs_energy(temperature=temperature, pressure=pressure)
